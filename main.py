@@ -21,7 +21,7 @@ app.add_middleware(
 )
 
 
-client = bigquery.Client(project="mgmt545-project")
+client = bigquery.Client(project="mgmt545-groupproject")
 
 def run_query(query: str, params: list = []):
     job_config = bigquery.QueryJobConfig(query_parameters=params)
@@ -84,7 +84,7 @@ def root():
 def login(request: LoginRequest):
     query = """
         SELECT id, name, email, home_store, password_hash
-        FROM mgmt545-project.uncle_joes.members     
+        FROM mgmt545-groupproject.unlce_joes.members     
         WHERE email = @email
     """
     params = [bigquery.ScalarQueryParameter("email", "STRING", request.email)]
@@ -115,7 +115,7 @@ def login(request: LoginRequest):
 def get_menu():
     query = """
         SELECT id, name, category, size, calories, price
-        FROM mgmt545-project.uncle_joes.menu_items
+        FROM mgmt545-groupproject.unlce_joes.menu_items
     """
     return run_query(query)
 
@@ -125,13 +125,13 @@ def get_menu():
 def get_locations():
     query = """
         SELECT id, city, state, address, hours, amenities
-        FROM mgmt545-project.uncle_joes.locations
+        FROM mgmt545-groupproject.unlce_joes.locations
     """
     return run_query(query)
 
 #Order History Endpoint
 
-@app.get("/members/{member_id}/orders", response_model=list[Order])
+@app.get("/members/{member_id}/orders", response_model=list[OrderHistory])
 def get_orders(member_id: int):
     query = """
         SELECT
@@ -143,8 +143,8 @@ def get_orders(member_id: int):
             oi.item_name,
             oi.quantity,
             oi.price
-        FROM mgmt545-project.uncle_joes.orders o
-        JOIN mgmt545-project.uncle_joes.order_items oi
+        FROM mgmt545-groupproject.unlce_joes.orders o
+        JOIN mgmt545-groupproject.unlce_joes.order_items oi
             ON o.order_id = oi.order_id
         WHERE o.member_id = @member_id
         ORDER BY o.order_date DESC
@@ -178,11 +178,10 @@ def get_orders(member_id: int):
 def get_points(member_id: int):
     query = """
         SELECT SUM(FLOOR(order_total)) as total_points
-        FROM mgmt545-project.uncle_joes.orders
+        FROM mgmt545-groupproject.unlce_joes.orders
         WHERE member_id = @member_id
     """
     params = [bigquery.ScalarQueryParameter("member_id", "INT64", member_id)]
     results = run_query(query, params)
     total = results[0]["total_points"] or 0
     return PointsBalance(member_id=member_id, total_points=int(total))
-EOF
