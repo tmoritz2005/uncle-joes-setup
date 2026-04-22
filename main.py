@@ -35,13 +35,13 @@ class LoginRequest(BaseModel):
     password: str
 
 class LoginResponse(BaseModel):
-    member_id: int
+    member_id: str
     name: str
     email: str
     home_store: int
 
 class MenuItem(BaseModel):
-    id: int
+    id: str
     name: str
     category: str
     size: Optional[str] = None
@@ -49,28 +49,45 @@ class MenuItem(BaseModel):
     price: float
 
 class Location(BaseModel):
-    id: int
+    id: str
     city: str
     state: str
-    address: str
+    monday_open: Optional[int] = None
+    monday_close: Optional[int] = None
+    tuesday_open: Optional[int] = None
+    tuesday_close: Optional[int] = None   
+    wednesday_open: Optional[int] = None
+    wednesday_close: Optional[int] = None
+    thursday_open: Optional[int] = None
+    thursday_close: Optional[int] = None
+    friday_open: Optional[int] = None
+    friday_close: Optional[int] = None
+    saturday_open: Optional[int] = None
+    saturday_close: Optional[int] = None
+    sunday_open: Optional[int] = None
+    sunday_close: Optional[int] = None
+    drive_thru: bool
+    door_dash: bool
+
+class Order(BaseModel):
     hours: Optional[str] = None
     amenities: Optional[str] = None
 
 class OrderItem(BaseModel):
-    menu_item_id: int
+    menu_item_id: str
     item_name: str
     quantity: int
     price: float
 
 class OrderHistory(BaseModel):
-    order_id: int
+    order_id: str
     store_id: int
     order_date: date
     order_total: float
     items: list[OrderItem] = []
 
 class PointsBalance(BaseModel):
-    member_id: int
+    member_id: str
     total_points: int
 
 
@@ -115,17 +132,39 @@ def login(request: LoginRequest):
 def get_menu():
     query = """
         SELECT id, name, category, size, calories, price
-        FROM mgmt545-groupproject.unlce_joes.menu_items
+        FROM mgmt545-groupproject.unlce_joes.menu
     """
     return run_query(query)
 
 #Locations Endpoint 
 
+#next week lets simplify this for users by combining hours and drive_thru adn door_dash into
+#weekly_hours and amenities respectively
 @app.get("/locations", response_model=list[Location])
 def get_locations():
     query = """
-        SELECT id, city, state, address, hours, amenities
-        FROM mgmt545-groupproject.unlce_joes.locations
+        SELECT 
+        id,
+        city, 
+        state, 
+        location_map_address as address, 
+        hours_monday_open as monday_open, 
+        hours_monday_close as monday_close,
+        hours_tuesday_open as tuesday_open, 
+        hours_tuesday_close as tuesday_close,
+        hours_wednesday_open as wednesday_open, 
+        hours_wednesday_close as wednesday_close,
+        hours_thursday_open as thursday_open, 
+        hours_thursday_close as thursday_close,
+        hours_friday_open as friday_open, 
+        hours_friday_close as friday_close,
+        hours_saturday_open as saturday_open, 
+        hours_saturday_close as saturday_close,
+        hours_sunday_open as sunday_open, 
+        hours_sunday_close as sunday_close,
+        drive_thru,
+        door_dash
+        FROM `mgmt545-groupproject.unlce_joes.locations`
     """
     return run_query(query)
 
