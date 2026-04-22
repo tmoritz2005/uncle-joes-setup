@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException
+from datetime import datetime
 from fastapi.middleware.cors import CORSMiddleware
 from google.cloud import bigquery
 from pydantic import BaseModel
@@ -43,10 +44,10 @@ class LoginResponse(BaseModel):
 class MenuItem(BaseModel):
     id: str
     name: str
-    category: str
+    category: Optional[str]= None
     size: Optional[str] = None
     calories: Optional[int] = None
-    price: float
+    price: Optional[float]= None
 
 class Location(BaseModel):
     id: str
@@ -66,24 +67,31 @@ class Location(BaseModel):
     saturday_close: Optional[int] = None
     sunday_open: Optional[int] = None
     sunday_close: Optional[int] = None
-    drive_thru: bool
-    door_dash: bool
+    drive_thru: Optional[bool]= None
+    door_dash: Optional[bool]= None
 
 class Order(BaseModel):
     hours: Optional[str] = None
     amenities: Optional[str] = None
 
 class OrderItem(BaseModel):
+    id: Optional[str]= None
     menu_item_id: str
-    item_name: str
-    quantity: int
-    price: float
+    item_name: Optional[str]= None
+    size: Optional[str] = None
+    quantity: Optional[int] = None
+    price: Optional[float]= None
 
 class OrderHistory(BaseModel):
     order_id: str
-    store_id: int
-    order_date: date
-    order_total: float
+    member_id: str
+    store_id: str
+    order_date: Optional[datetime]= None
+    items_subtotal: Optional[float] = None
+    order_discount: Optional[float] = None
+    order_subtotal: Optional[float] = None
+    sales_tax: Optional[float] = None
+    order_total: Optional[float]= None
     items: list[OrderItem] = []
 
 class PointsBalance(BaseModel):
@@ -168,59 +176,80 @@ def get_locations():
     """
     return run_query(query)
 
+@app.get("/locations/{id}", response_model=list[Location])
+def get_ind_locations(id: str):
+    query = f"""
+        SELECT 
+        id,
+        city, 
+        state, 
+        location_map_address as address, 
+        hours_monday_open as monday_open, 
+        hours_monday_close as monday_close,
+        hours_tuesday_open as tuesday_open, 
+        hours_tuesday_close as tuesday_close,
+        hours_wednesday_open as wednesday_open, 
+        hours_wednesday_close as wednesday_close,
+        hours_thursday_open as thursday_open, 
+        hours_thursday_close as thursday_close,
+        hours_friday_open as friday_open, 
+        hours_friday_close as friday_close,
+        hours_saturday_open as saturday_open, 
+        hours_saturday_close as saturday_close,
+        hours_sunday_open as sunday_open, 
+        hours_sunday_close as sunday_close,
+        drive_thru,
+        door_dash
+        FROM `mgmt545-groupproject.unlce_joes.locations`
+        WHERE id = '{id}'
+    """
+    return run_query(query)
+
 #Order History Endpoint
 
 @app.get("/members/{member_id}/orders", response_model=list[OrderHistory])
-def get_orders(member_id: int):
+def get_orders(member_id: str):
     query = """
-        SELECT
+        SELECT 
             o.order_id,
+            o.member_id,   -- Added member_id to the SELECT
             o.store_id,
             o.order_date,
             o.order_total,
-            oi.menu_item_id,
-            oi.item_name,
-            oi.quantity,
-            oi.price
-        FROM mgmt545-groupproject.unlce_joes.orders o
-        JOIN mgmt545-groupproject.unlce_joes.order_items oi
+            ARRAY_AGG(STRUCT(
+                oi.menu_item_id,
+                oi.item_name,
+                oi.quantity,
+                oi.price
+            )) as items
+        FROM `mgmt545-groupproject.unlce_joes.orders` o
+        JOIN `mgmt545-groupproject.unlce_joes.order_items` oi
             ON o.order_id = oi.order_id
         WHERE o.member_id = @member_id
+        GROUP BY 
+            o.order_id, 
+            o.member_id,   -- Added member_id to GROUP BY
+            o.store_id, 
+            o.order_date, 
+            o.order_total
         ORDER BY o.order_date DESC
     """
-    params = [bigquery.ScalarQueryParameter("member_id", "INT64", member_id)]
+    
+    params = [bigquery.ScalarQueryParameter("member_id", "STRING", member_id)]
     rows = run_query(query, params)
-
-    orders = {}
-    for row in rows:
-        oid = row["order_id"]
-        if oid not in orders:
-            orders[oid] = Order(
-                order_id=oid,
-                store_id=row["store_id"],
-                order_date=row["order_date"],
-                order_total=row["order_total"],
-                items=[]
-            )
-        orders[oid].items.append(OrderItem(
-            menu_item_id=row["menu_item_id"],
-            item_name=row["item_name"],
-            quantity=row["quantity"],
-            price=row["price"]
-        ))
-
-    return list(orders.values())
+    
+    return [OrderHistory(**dict(row)) for row in rows]
 
 #Points Balance Endpoint
 
 @app.get("/members/{member_id}/points", response_model=PointsBalance)
-def get_points(member_id: int):
+def get_points(member_id: str):
     query = """
         SELECT SUM(FLOOR(order_total)) as total_points
         FROM mgmt545-groupproject.unlce_joes.orders
         WHERE member_id = @member_id
     """
-    params = [bigquery.ScalarQueryParameter("member_id", "INT64", member_id)]
+    params = [bigquery.ScalarQueryParameter("member_id", "STRING", member_id)]
     results = run_query(query, params)
     total = results[0]["total_points"] or 0
     return PointsBalance(member_id=member_id, total_points=int(total))
