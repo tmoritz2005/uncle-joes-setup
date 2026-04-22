@@ -1,0 +1,23 @@
+[tool.poetry]
+name = "my-app"
+version = "0.1.0"
+description = "A FastAPI app with Swagger UI"
+package-mode = false
+authors = ["Your Name <your@email.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+fastapi = "^0.111.0"
+uvicorn = {extras = ["standard"], version = "^0.30.0"}
+pydantic = "^2.7.0"
+google-cloud-bigquery = "^3.20.0"
+bcrypt = "^5.0.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.0.0"
+httpx = "^0.27.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
