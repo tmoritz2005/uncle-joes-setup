@@ -253,3 +253,17 @@ def get_points(member_id: str):
     results = run_query(query, params)
     total = results[0]["total_points"] or 0
     return PointsBalance(member_id=member_id, total_points=int(total))
+
+
+@app.get("/menu/{id}", response_model=MenuItem)
+def get_menu_item(id: str):
+    query = """
+        SELECT id, name, category, size, calories, price
+        FROM `mgmt545-groupproject.unlce_joes.menu`
+        WHERE id = @id
+    """
+    params = [bigquery.ScalarQueryParameter("id", "STRING", id)]
+    results = run_query(query, params)
+    if not results:
+        raise HTTPException(status_code=404, detail="Menu item not found")
+    return results[0]
