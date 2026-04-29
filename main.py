@@ -2,10 +2,15 @@ from fastapi import FastAPI, HTTPException
 from datetime import datetime
 from fastapi.middleware.cors import CORSMiddleware
 from google.cloud import bigquery
+from google.api_core.exceptions import NotFound,BadRequest,GoogleAPIError
 from pydantic import BaseModel
 from typing import Optional
 from datetime import date
 import bcrypt
+import logging
+
+logging.basicConfig(level=logging.INFO) #changes
+logger = logging.getLogger(__name__)
 
 PROJECT_ID = "mgmt545-groupproject"
 DATASET = "unlce_joes"
@@ -21,13 +26,32 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-client = bigquery.Client(project="mgmt545-groupproject")
-
+try:
+    client = bigquery.Client(project=PROJECT_ID)
+except Exception as e:
+    logger.critical(f"Failed to initialize BigQuery client: {e}")
+    raise RuntimeError("Could not connect to BigQuery") from e
+ 
+ 
 def run_query(query: str, params: list = []):
-    job_config = bigquery.QueryJobConfig(query_parameters=params)
-    result = client.query(query, job_config=job_config).result()
-    return [dict(row) for row in result]
+    """Run a parameterized BigQuery query and return rows as dicts."""
+    try:
+        job_config = bigquery.QueryJobConfig(query_parameters=params)
+        result = client.query(query, job_config=job_config).result()
+        return [dict(row) for row in result]
+    except BadRequest as e:
+        logger.error(f"BigQuery bad request: {e}")
+        raise HTTPException(status_code=400, detail="Malformed query or invalid parameters")
+    except NotFound as e:
+        logger.error(f"BigQuery resource not found: {e}")
+        raise HTTPException(status_code=404, detail="Database table or resource not found")
+    except GoogleAPIError as e:
+        logger.error(f"BigQuery API error: {e}")
+        raise HTTPException(status_code=503, detail="Database service temporarily unavailable")
+    except Exception as e:
+        logger.error(f"Unexpected database error: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
 
 #Pydantics
 
@@ -103,7 +127,7 @@ class PointsBalance(BaseModel):
 def root():
     return {"message": "Uncle Joe's Coffee API is running"}
 
-#User Authorization Endpoint - Note that project name might need to be changed
+#User Authorization Endpoint 
 
 @app.post("/login", response_model=LoginResponse)
 def login(request: LoginRequest):
@@ -253,3 +277,6 @@ def get_points(member_id: str):
     results = run_query(query, params)
     total = results[0]["total_points"] or 0
     return PointsBalance(member_id=member_id, total_points=int(total))
+
+
+#Google Maps Endpoint
