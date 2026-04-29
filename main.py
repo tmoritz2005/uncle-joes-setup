@@ -15,7 +15,7 @@ app = FastAPI(title="Uncle Joe's Coffee API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["https://uncle-joes-frontend-1055452553205.us-central1.run.app"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
