@@ -108,9 +108,9 @@ def root():
 @app.post("/login", response_model=LoginResponse)
 def login(request: LoginRequest):
     query = """
-        SELECT id, name, email, home_store, password_hash
+        SELECT string_field_0 as id, string_field_1 || ' ' || string_field_2 as name, string_field_3 as email, string_field_5 as home_store, string_field_6 as password_hash
         FROM mgmt545-groupproject.unlce_joes.members     
-        WHERE email = @email
+        WHERE string_field_3 = @email
     """
     params = [bigquery.ScalarQueryParameter("email", "STRING", request.email)]
     results = run_query(query, params)
