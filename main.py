@@ -39,7 +39,7 @@ class LoginResponse(BaseModel):
     member_id: str
     name: str
     email: str
-    home_store: int
+    home_store: str
 
 class MenuItem(BaseModel):
     id: str
