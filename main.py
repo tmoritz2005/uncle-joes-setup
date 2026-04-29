@@ -3,8 +3,8 @@ from datetime import datetime
 from fastapi.middleware.cors import CORSMiddleware
 from google.cloud import bigquery
 from pydantic import BaseModel
-from typing import Optional
-from datetime import date
+from typing import Optional, List
+from datetime import date, datetime, timezone
 import bcrypt
 
 PROJECT_ID = "mgmt545-groupproject"
@@ -97,6 +97,17 @@ class OrderHistory(BaseModel):
 class PointsBalance(BaseModel):
     member_id: str
     total_points: int
+
+#classes for order button
+class OrderCreationRequest(BaseModel):
+    menu_item_id: str
+    quantity: int
+
+#retrieves request and creates the 
+class OrderFullfilment(BaseModel):
+    member_id: str
+    store_id: str
+    order_items: List[OrderCreation]
 
 
 @app.get("/")
@@ -267,3 +278,115 @@ def get_menu_item(id: str):
     if not results:
         raise HTTPException(status_code=404, detail="Menu item not found")
     return results[0]
+
+@app.post("/orders", status_code=201)
+async def create_order(order: OrderFullfilment):
+
+    # retrieve items in the order
+    requested_item_ids = [item.menu_item_id for item in order.order_items]
+    
+    # Find the information to post the order from menu
+    # we do this here so that customers cannot manipulate information
+    query = """
+        SELECT 
+            menu_item_id, 
+            item_name,
+            price 
+        FROM `your_project.your_dataset.menu`
+        WHERE menu_item_id IN UNNEST(@item_ids)
+    """
+    job_config = bigquery.QueryJobConfig(
+        query_parameters=[
+            bigquery.ArrayQueryParameter("item_ids", "STRING", requested_item_ids)
+        ]
+    )
+    
+
+    try:
+        query_job = bq_client.query(query, job_config=job_config)
+        menu_results = query_job.result()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    menu_catalog = {
+        row.menu_item_id: {"item_name": row.item_name, "price": row.price} 
+        for row in menu_results
+    }
+
+    # Gather the max order_id so that the id is correctly ordered
+    max_id_query = """
+        SELECT MAX(CAST(order_id AS INT64)) as current_max 
+        FROM `your_project.your_dataset.orders`
+    """
+
+    # Create new order_id by adding 1 to the previous order_id
+    try:
+        max_job = bq_client.query(max_id_query)
+        max_result = list(max_job.result())
+        current_max = max_result[0].current_max if max_result and max_result[0].current_max is not None else 0
+        order_id = str(current_max + 1)
+    except Exception as e:
+        order_id = "1"
+
+
+    order_total = 0.0
+    order_item_rows = []
+
+    # make sure the order is asking for an item that is currently offered
+    for requested_item in order.order_items:
+        if requested_item.menu_item_id not in menu_catalog:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Invalid item requested: {requested_item.menu_item_id}"
+            )
+            
+        # retrieve price and other important information to correctly update orders table 
+        official_item = menu_catalog[requested_item.menu_item_id]
+        item_price = official_item["price"]
+        item_total = item_price * requested_item.quantity
+        
+        order_total += item_total
+        
+        order_item_rows.append({
+            "order_id": order_id,
+            "menu_item_id": requested_item.menu_item_id,
+            "item_name": official_item["item_name"],
+            "quantity": requested_item.quantity,
+            "price": item_price 
+        })
+
+    # retrieve order time so that there is no null values in the posted order
+    order_date = datetime.now(timezone.utc).isoformat()
+    
+    # create a dictionary containing all information for post
+    order_row = {
+        "order_id": order_id,
+        "member_id": order.member_id,
+        "store_id": order.store_id,
+        "order_date": order_date,
+        "order_total": order_total
+    }
+
+
+    # take dictionary and complete the post
+    try:
+        orders_table_ref = "your_project.your_dataset.orders"
+        items_table_ref = "your_project.your_dataset.order_items"
+        
+        orders_errors = bq_client.insert_rows_json(orders_table_ref, [order_row])
+        if orders_errors:
+            raise Exception(f"Failed to insert order: {orders_errors}")
+            
+        items_errors = bq_client.insert_rows_json(items_table_ref, order_item_rows)
+        if items_errors:
+            raise Exception(f"Failed to insert order items: {items_errors}")
+
+        return {
+            "message": "Order successfully created", 
+            "order_id": order_id,
+            "order_total": order_total,
+            "status": "success"
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
