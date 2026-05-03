@@ -69,6 +69,7 @@ class Location(BaseModel):
     sunday_close: Optional[int] = None
     drive_thru: Optional[bool]= None
     door_dash: Optional[bool]= None
+    address: Optional[str] = None
 
 class Order(BaseModel):
     hours: Optional[str] = None
