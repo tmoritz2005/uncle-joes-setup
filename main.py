@@ -108,7 +108,7 @@ class OrderCreationRequest(BaseModel):
 class OrderFullfilment(BaseModel):
     member_id: str
     store_id: str
-    order_items: List[OrderCreation]
+    order_items: List[OrderCreationRequest]
 
 
 @app.get("/")
@@ -293,7 +293,7 @@ async def create_order(order: OrderFullfilment):
             menu_item_id, 
             item_name,
             price 
-        FROM `your_project.your_dataset.menu`
+        FROM `mgmt545-groupproject.unlce_joes.menu`
         WHERE menu_item_id IN UNNEST(@item_ids)
     """
     job_config = bigquery.QueryJobConfig(
@@ -304,7 +304,7 @@ async def create_order(order: OrderFullfilment):
     
 
     try:
-        query_job = bq_client.query(query, job_config=job_config)
+        query_job = client.query(query, job_config=job_config)
         menu_results = query_job.result()
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -317,12 +317,12 @@ async def create_order(order: OrderFullfilment):
     # Gather the max order_id so that the id is correctly ordered
     max_id_query = """
         SELECT MAX(CAST(order_id AS INT64)) as current_max 
-        FROM `your_project.your_dataset.orders`
+        FROM `mgmt545-groupproject.unlce_joes.orders`
     """
 
     # Create new order_id by adding 1 to the previous order_id
     try:
-        max_job = bq_client.query(max_id_query)
+        max_job = client.query(max_id_query)
         max_result = list(max_job.result())
         current_max = max_result[0].current_max if max_result and max_result[0].current_max is not None else 0
         order_id = str(current_max + 1)
@@ -371,14 +371,14 @@ async def create_order(order: OrderFullfilment):
 
     # take dictionary and complete the post
     try:
-        orders_table_ref = "your_project.your_dataset.orders"
-        items_table_ref = "your_project.your_dataset.order_items"
+        orders_table_ref = "mgmt545-groupproject.unlce_joes.orders"
+        items_table_ref = "mgmt545-groupproject.unlce_joes.order_items"
         
-        orders_errors = bq_client.insert_rows_json(orders_table_ref, [order_row])
+        orders_errors = client.insert_rows_json(orders_table_ref, [order_row])
         if orders_errors:
             raise Exception(f"Failed to insert order: {orders_errors}")
             
-        items_errors = bq_client.insert_rows_json(items_table_ref, order_item_rows)
+        items_errors = client.insert_rows_json(items_table_ref, order_item_rows)
         if items_errors:
             raise Exception(f"Failed to insert order items: {items_errors}")
 
